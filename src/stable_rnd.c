@@ -35,7 +35,7 @@ stable_rnd_seed(StableDist * dist, unsigned long int s)
 }
 
 
-inline double
+static inline double
 stable_rnd_point(StableDist *dist)
 {
   return dist->mu_1 +

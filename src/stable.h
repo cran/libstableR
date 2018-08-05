@@ -451,7 +451,7 @@ double stable_minusloglikelihood(const gsl_vector * theta, void * p);
  ************************************************************************/
 void stable_rnd(StableDist *dist, double* rnd, unsigned int n);
 
-double stable_rnd_point(StableDist *dist);
+//double stable_rnd_point(StableDist *dist);
 
 void stable_rnd_seed(StableDist * dist, unsigned long int s);
 #endif //stable_H
