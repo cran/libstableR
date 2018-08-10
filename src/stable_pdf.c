@@ -55,19 +55,14 @@ double stable_pdf_g1(double theta, void *args)
   #endif
 
   g = V + dist->xxipow;
-  //Obtenemos log(g), en realidad
-  //Taylor: exp(-x) ~ 1-x en x ~ 0 
-  //Si g<1.52e-8 -> exp(-g)=(1-g) -> g·exp(-g) = g·(1-g) con precision double.
-  //Asi nos ahorramos calcular una exponencial. (que es costoso).
+  //Actually we compute log(g)
+  //Taylor expansion: exp(-x) ~ 1-x for x ~ 0 
+  //If g<1.52e-8 -> exp(-g)=(1-g) -> g·exp(-g) = g·(1-g) with double precision
   if (isnan(g)) return 0.0;
   if((g=exp(g)) < 1.522e-8 ) return (1.0-g)*g;
   g = exp(-g)*g;
   if (isnan(g) || g<0) return 0.0;
 
-  /*fprintf(FINTEG,"%1.4f\t%1.4f\t%1.6f\t%1.6e\n",
-          dist->alpha,dist->beta_,theta,g);*/
-
-//  else return g;
   return g;
 }
 
@@ -76,41 +71,21 @@ double stable_pdf_g2(double theta, void *args)
   StableDist *dist = (StableDist *)args;
   double g, cos_theta,aux,V;
 
-//  g   = dist->beta_;
-//  aux = theta+dist->theta0_;
-//  V   = M_PI_2-theta;
-
-//  if ((g==1 && aux < THETA_TH*1.1 && dist->alpha <1) || (g==-1 && V<THETA_TH*1.1 && dist->alpha>1)) {
-//    V = dist->Vbeta1;// printf("");
- // }
-//  else {
-
   cos_theta = cos(theta);
   aux = (dist->theta0_+theta)*dist->alpha;
   V = log(cos_theta/sin(aux))*dist->alphainvalpha1 +
        + log(cos(aux-theta)/cos_theta) + dist->k1;
-//  }
 
   #ifdef DEBUG
   integ_eval++;
   #endif
 
   g = V + dist->xxipow;
-  //g>6.55 -> exp(g-exp(g)) < 2.1E-301
+  // g>6.55 -> exp(g-exp(g)) < 2.1E-301
   if(g>6.55 || g<-700) return 0.0;
-  //Taylor: x·exp(-x) ~ x·(1-x) cuando x ~ 0 
-  //Si g < 1.52e-8 -> g·exp(-g) = g·(1-g) con precision double.
-  //Asi nos ahorramos calcular una exponencial (que es costoso).
   else  g=exp(g);
-//  if(isnan(g) || isinf(g)) {return 0.0;}
-//  else if (g < 1.522e-8) {return (1.0-g)*g;}
-/*  else*/ g = exp(-g)*g;
+  g = exp(-g)*g;
   if (isnan(g) || isinf(g) || g<0) {return 0.0;}
-/* 
-  fprintf(FINTEG,"%1.16lf\t%1.16lf\t%1.16lf\t%1.16e\n",
-          dist->alpha,dist->beta_,theta,g);
-*/
-
   return g;
 }
 
@@ -134,14 +109,10 @@ double stable_g_aux1(double theta, void *args)
   V = sin(theta)*aux/dist->beta_ + log(aux) + dist->k1;
   g = V + dist->xxipow;
 
-//  printf("%lf %lf %lf",theta,V,g); getchar();
-
   #ifdef DEBUG
   integ_eval++;
   #endif
 
-//  if (isnan(g)) { return -HUGE_VAL; }
-//  else return g;
   return g;
 }
 
@@ -160,9 +131,7 @@ double stable_g_aux2(double theta, void *args)
   #ifdef DEBUG
   integ_eval++;
   #endif
-//  if (g > 1.0) return 1.0;
-//  else if(g < 0.0 || isnan(g)) return 0.0;
-//  else return g;
+
   return g;
 }
 
@@ -203,11 +172,9 @@ void stable_pdf(StableDist *dist, const double* x, const unsigned int Nx,
   pthread_t threads[THREADS];
   StableArgsPdf args[THREADS];
   
-/* Si no se introduce el puntero para el error, se crea*/
   if (err==NULL) {flag=1;err=(double*)malloc(Nx*sizeof(double));}
 
-/* Reparto de los puntos de evaluacion entre los hilos disponibles */
-
+  // Evaluation points are distributed between the threads
   Nx_thread[0] = Nx/THREADS;
   if (0 < Nx%THREADS) Nx_thread[0]++;
 
@@ -219,8 +186,7 @@ void stable_pdf(StableDist *dist, const double* x, const unsigned int Nx,
       initpoint[k] = initpoint[k-1] + Nx_thread[k-1];
     }
 
-/* Creacion de los hilos, pasando a cada uno una copia de la distribucion */
-
+  // Threads are created with a copy of the distribution
   for(k=0; k<THREADS; k++)
     {
       args[k].ptr_funcion = dist->stable_pdf_point;
@@ -239,13 +205,13 @@ void stable_pdf(StableDist *dist, const double* x, const unsigned int Nx,
         }
     }
 
-/* Esperar a finalizacion de todos los hilos */
+  // Wait until every thread finishes
   for(k=0; k<THREADS; k++)
     {
       pthread_join(threads[k], &status);
     }
 
-/* Liberar las copias de la distribucion realizadas */
+  // Free distribution copies
   for(k=0; k<THREADS; k++)
     {
       stable_free(args[k].dist);
@@ -255,14 +221,14 @@ void stable_pdf(StableDist *dist, const double* x, const unsigned int Nx,
 }
 
 /******************************************************************************/
-/*   Estrategia de integracion para PDF                                       */
+/*   PDF computation quadrature method                                        */
 /******************************************************************************/
 
 double
-stable_integration_pdf_low(StableDist *dist, double(*integrando)(double,void*),
+stable_integration_pdf_low(StableDist *dist, double(*integrand)(double,void*),
                   double(*integ_aux)(double,void*), double *err)
-/*esta es estrategia de baja precision: 2 intervalos de integracion:simetrico en
-torno al maximo y el resto*/
+/* low precision method: two integration intervals --one around the maximum and
+   another one for the rest */
 {
   int warnz[5],k;
   double pdf=0,
@@ -283,8 +249,7 @@ torno al maximo y el resto*/
   switch (k)
     {
       case 0:   //Max en el interior del intervalo de integracion.
-    // Crea intervalo simetrico entorno al maximo con el punto encontrado
-    // mas proximo a el y los otros intervalos:
+    // Create integrand sub-interval around the maximum
         if (theta[2]-theta[0] < theta[4]-theta[2]) {
           theta[2]=theta[2]*2.0-theta[0];
         }
@@ -297,27 +262,27 @@ torno al maximo y el resto*/
          }
         break;
 
-      case -2: //Max en el borde izquierdo del intervalo
-        // puede pasar si beta=+-1 y alpha<1        //  .
-        pdf1=(integrando)(theta[0],(void*)dist);
+      case -2: // Max found in the left border
+        // This is possible if beta=+-1 and alpha<1
+        pdf1=(integrand)(theta[0],(void*)dist);
 
-        theta[2]=zbrent(integrando,(void*)dist,theta[0],theta[4],
+        theta[2]=zbrent(integrand,(void*)dist,theta[0],theta[4],
                          pdf1*1e-6,1e-6*(theta[4]-theta[0]),&warnz[2]);
         break;
 
-      case  -1: //Max en el borde derecho del intervalo
-        // puede pasar si beta=+-1 y alpha<1
+      case  -1: //Max found in the right corner
+        // This is possible if beta=+-1 and alpha<1
         theta[1]=theta[4];
         theta[4]=theta[0];
         theta[0]=theta[1];
 
-        pdf1=(integrando)(theta[0],(void*)dist);
+        pdf1=(integrand)(theta[0],(void*)dist);
 
-        theta[2]=zbrent(integrando,(void*)dist,theta[4],theta[0],
+        theta[2]=zbrent(integrand,(void*)dist,theta[4],theta[0],
                          pdf1*1e-6,1e-6*(theta[0]-theta[4]),&warnz[2]);
         break;
 
-      default: // Nunca llegara aqui
+      default: // Never get here
         theta[1] = 0.5*(theta[4]-theta[2]);
         theta[3] = 0.5*(theta[2]+theta[0]);
         break;
@@ -328,7 +293,7 @@ torno al maximo y el resto*/
   integ_eval=0;
   #endif
 
-  stable_integration(dist,integrando,theta[0],theta[2],
+  stable_integration(dist,integrand,theta[0],theta[2],
                              absTOL,relTOL,IT_MAX,
                              &pdf_aux,&err_aux,STABLE_QAG2);
   pdf=fabs(pdf_aux);
@@ -338,11 +303,8 @@ torno al maximo y el resto*/
   warnz[0]=integ_eval;
   integ_eval=0;
   #endif
-/*
-  printf("%e %e\n",max(pdf*relTOL,absTOL)*0.5,relTOL);
-  getchar();
-*/
-  stable_integration(dist,integrando,theta[2],theta[4],
+
+  stable_integration(dist,integrand,theta[2],theta[4],
                              max(pdf*relTOL,absTOL)*0.5,relTOL,IT_MAX,
                              &pdf_aux,&err_aux,STABLE_QAG2);
   pdf+=fabs(pdf_aux);
@@ -368,29 +330,28 @@ torno al maximo y el resto*/
 }
 
 double
-stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
+stable_integration_pdf(StableDist *dist, double(*integrand)(double,void*),
                   double(*integ_aux)(double,void*), double *err)
 {
-/* Este caso se da en:
-       x >> xi con alpha > 1
-       x ~  xi con alpha < 1
-       x >> 0  con alpha = 1 y beta < 0
-       x << 0  con alpha = 1 y beta > 0 */
+/* Get here if:
+       x >> xi for alpha > 1
+       x ~  xi for alpha < 1
+       x >> 0  for alpha = 1 and beta < 0
+       x << 0  for alpha = 1 and beta > 0 */
 
-/* Estrategia:
-     - Busca el máximo del integrando: theta[2]
-     - Busca puntos donde integrando cae por debajo de un umbral
-     - 1 - Integra en intervalo simetrico entorno al maximo
-     - 2 - Integra el resto que queda por encima del umbral
-     - 3 y 4 - Integra en los bordes por debajo del umbral
-     - Suma todo */
+/* Strategy:
+     - Find the maximun of the integrand: theta[2]
+     - Find the point where the integrand goes bellow a threshold
+     - 1 - Integrate in a symmetric interval around the maximum
+     - 2 - Integrate the remaining portion above the threshold
+     - 3 y 4 - Integrate below the threshold
+     - Add 1 to 4*/
 
   int warnz[5],k;
   double pdf=0,
          pdf_aux=0,pdf1=0,pdf2=0.0,pdf3=0.0,
          err_aux=0;
   double theta[5];
-  //int method_;
 
   #ifdef DEBUG
   int aux_eval=0;
@@ -403,13 +364,12 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
 
   switch (k)
     {
-      case 0:   //Max en el interior del intervalo de integracion.
-        // Busca puntos donde integrando cae por debajo de umbral
+      case 0:   // Maximum found in the interior of the integration interval
+        // Find points where integrand goes below threshold
         pdf1 = (integ_aux)(theta[0],(void*)dist);
         pdf2 = (integ_aux)(theta[4],(void*)dist);
 
         if (fabs(AUX1)>fabs(pdf1)) {
-        //  printf("1 %1.1lf ",x);
           theta[1]=theta[0]+1e-2*(theta[2]-theta[0]);
         }
         else {
@@ -418,7 +378,6 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
 		}
 
         if (fabs(AUX2)>fabs(pdf2)) {
-        //  printf("2 %1.1lf ",x);
           theta[3]=theta[4]-1e-2*(theta[4]-theta[2]);
         }
         else {
@@ -426,8 +385,7 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
                         AUX2, 1e-9*(theta[4]-theta[2]),&warnz[3]);
         }
 
-    // Crea intervalo simetrico entorno al maximo con el punto encontrado
-    // mas proximo a el y los otros intervalos:
+    // Symmetric interval around the maximum
         if (theta[2]-theta[1] < theta[3]-theta[2]) {
           theta[2]=theta[2]*2.0-theta[1];
         }
@@ -443,30 +401,29 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
          }
         break;
 
-      case -2: //Max en el borde izquierdo del intervalo
-        // puede pasar si beta=+-1 y alpha<1        //  .
+      case -2: // Max in left border
         theta[1]=theta[0];
-        pdf1=(integrando)(theta[1],(void*)dist);
+        pdf1=(integrand)(theta[1],(void*)dist);
 
-        theta[2]=zbrent(integrando,(void*)dist,theta[1],theta[4],
+        theta[2]=zbrent(integrand,(void*)dist,theta[1],theta[4],
                          pdf1*1e-6,1e-9*(theta[4]-theta[1]),&warnz[2]);
         pdf1=stable_pdf_g(theta[2],(void*)dist);
-        theta[3]=zbrent(integrando,(void*)dist,theta[2],theta[4],
+        theta[3]=zbrent(integrand,(void*)dist,theta[2],theta[4],
                          pdf1*1e-6,1e-9*(theta[4]-theta[2]),&warnz[2]);
         pdf1=stable_pdf_g(theta[3],(void*)dist);
 
         break;
 
-      case  -1: //Max en el borde derecho del intervalo
+      case  -1: // Max in right border
         // puede pasar si beta=+-1 y alpha<1
         theta[1]=theta[4];
         theta[4]=theta[0];
-        pdf1=(integrando)(theta[1],(void*)dist);
+        pdf1=(integrand)(theta[1],(void*)dist);
 
-        theta[2]=zbrent(integrando,(void*)dist,theta[4],theta[1],
+        theta[2]=zbrent(integrand,(void*)dist,theta[4],theta[1],
                          pdf1*1e-6,1e-9*(theta[1]-theta[4]),&warnz[2]);
         pdf1=stable_pdf_g(theta[2],(void*)dist);
-        theta[3]=zbrent(integrando,(void*)dist,theta[4],theta[2],
+        theta[3]=zbrent(integrand,(void*)dist,theta[4],theta[2],
                          pdf1*1e-6,1e-9*(theta[2]-theta[4]),&warnz[3]);
  
         theta[0]=theta[1];
@@ -483,7 +440,7 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
   integ_eval=0;
   #endif
 
-  stable_integration(dist,integrando,theta[1],theta[2],
+  stable_integration(dist,integrand,theta[1],theta[2],
                              absTOL,relTOL,IT_MAX,
                              &pdf_aux,&err_aux,METHOD1);
   pdf1=fabs(pdf_aux);
@@ -494,7 +451,7 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
   integ_eval=0;
   #endif
 
-  stable_integration(dist,integrando,theta[2],theta[3],
+  stable_integration(dist,integrand,theta[2],theta[3],
                              max(pdf1*relTOL,absTOL)*0.25,relTOL,IT_MAX,
                              &pdf_aux,&err_aux,METHOD2);
   pdf2=fabs(pdf_aux);
@@ -504,7 +461,7 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
   integ_eval=0;
   #endif
 
-  stable_integration(dist,integrando,theta[3],theta[4],
+  stable_integration(dist,integrand,theta[3],theta[4],
                             max((pdf2+pdf1)*relTOL,absTOL)*0.25,relTOL,IT_MAX,
                             &pdf_aux,&err_aux,METHOD3);
   pdf3=fabs(pdf_aux);
@@ -514,18 +471,14 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
   integ_eval=0;
   #endif
 
-  stable_integration(dist,integrando,theta[0],theta[1],
+  stable_integration(dist,integrand,theta[0],theta[1],
                              max((pdf3+pdf2+pdf1)*relTOL,absTOL)*0.25,relTOL,IT_MAX,
                              &pdf_aux,&err_aux,STABLE_QAG2);
   *err+=err_aux*err_aux;
 
 
-  //Sumar de menor a mayor contribucion para minimizar error de redondeo.
+  // Add from lowest to highest contribution (minimize numerical error)
   pdf=fabs(pdf_aux)+pdf3+pdf2+pdf1;
-  //pdf3=0;
-  //pdf_aux=0;
-  //warnz[2]=0;
-  //pdf=pdf2+pdf1;
   *err=sqrt(*err)/pdf;
 
   #ifdef DEBUG
@@ -543,7 +496,7 @@ stable_integration_pdf(StableDist *dist, double(*integrando)(double,void*),
 }
 
 /******************************************************************************/
-/*   PDF de casos particulares                                                */
+/*   PDF of special cases                                               */
 /******************************************************************************/
 
 double
@@ -582,24 +535,20 @@ stable_pdf_point_LEVY(StableDist *dist, const double x, double *err)
 }
 
 /******************************************************************************/
-/*   PDF en otros casos                                                       */
+/*   General PDF                                                     */
 /******************************************************************************/
 
 double
 stable_pdf_point_PEQXXIP(StableDist *dist, const double x, double *err)
 {
-/* Este caso se da en:
+/* Get here if:
        x ~ xi  con alpha > 1
        x >> xi con alpha < 1
        x << 0  con alpha = 1 y beta < 0
        x >> 0  con alpha = 1 y beta > 0 */
 
-/* Estrategia:
-     - Busca el máximo del integrando: theta[2]
-     - 1 - Integra en intervalo simetrico entorno al maximo
-     - 2 - Integra el resto que queda por encima del umbral
-     - Suma todo */
-  return 0.0;
+/* Removed in final version */
+    return 0.0;
 }
 
 double
@@ -619,7 +568,7 @@ stable_pdf_point_ALPHA_1(StableDist *dist, const double x, double *err)
   #endif
 
   x_=(x-dist->mu_0)/dist->sigma;
-  //xxi=x_-dist->xi;
+
   dist->beta_ = dist->beta;
 
   if (dist->beta < 0.0)
@@ -650,22 +599,12 @@ double stable_pdf_point_STABLE(StableDist *dist, const double x, double *err)
   x_=(x-dist->mu_0)/dist->sigma;
   xxi=x_-dist->xi;
 
-  /*Si justo evaluo en o cerca de xi interpolacion lineal*/
-  //xxi_th = XXI_TH*(1.0+fabs(dist->alphainvalpha1-1.0));
-
   if (fabs(xxi) <= XXI_TH)
     {
       *err=0;
-//      printf("_%lf_\n",x);
+
       pdf = exp(gammaln(1.0+1.0/dist->alpha)) *
             cos(dist->theta0)/(M_PI*dist->S);
-/*
-      if (xxi>0) pdf1 = stable_pdf_point(dist,(dist->xi+1.01*xxi_th)*dist->sigma,err);
-      else if(xxi==0) pdf1=pdf;
-      else pdf1 = stable_pdf_point(dist,(dist->xi-1.01*xxi_th)*dist->sigma,err);
-
-      pdf = pdf*(1-fabs(xxi)/(xxi_th*1.01))+pdf1*fabs(xxi)/(xxi_th*1.01);
- */
 
       #ifdef DEBUG
       Rprintf("Aproximando x a zeta para alpha = %f, beta = %f, zeta = %f : pdf = %f\n",
@@ -689,8 +628,8 @@ double stable_pdf_point_STABLE(StableDist *dist, const double x, double *err)
     }
   dist->xxipow=dist->alphainvalpha1*log(fabs(xxi));
 
-  /*Si theta0~=-PI/2 intervalo de integración nulo*/
-  /*incluye a beta=+-1 y alpha<1->pdf nula a la izqda/dcha de xi*/
+  /* If theta0~=-PI/2 pdf = 0.0 */
+  /* This is possible if beta=+-1, alpha < 1 and x < xi*/
   if (fabs(dist->theta0_+M_PI_2)<2*THETA_TH)
     {
      #ifdef DEBUG
@@ -700,17 +639,7 @@ double stable_pdf_point_STABLE(StableDist *dist, const double x, double *err)
      return 0.0;
     }
   
-//  if (dist->xxipow > XXIPOWMAX)
-//    {
   pdf = stable_integration_pdf(dist,&stable_pdf_g2,&stable_g_aux2,err);
-//    }
-//  else if (dist->xxipow < XXIPOWMIN)
-//    {
-//      pdf = stable_pdf_point_PEQXXIP(dist,x,err)
-//    }
-//  else
-//    {
-//    }
 
   pdf = dist->c2_part/xxi*pdf;
 
@@ -718,7 +647,7 @@ double stable_pdf_point_STABLE(StableDist *dist, const double x, double *err)
 }
 
 /******************************************************************************/
-/*   PDF point en general                                                     */
+/*   General PDF point                                                      */
 /******************************************************************************/
 
 double

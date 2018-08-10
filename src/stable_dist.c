@@ -1,20 +1,20 @@
 /* stable/stable_dist.c
- * 
+ *
  * Main Libstable source file. Definition of the StableDist structures
  * and auxiliary functions to manage alpha-stable distributions.
  *
  * Copyright (C) 2013. Javier Royuela del Val
  *                     Federico Simmross Wattenberg
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; version 3 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; If not, see <http://www.gnu.org/licenses/>.
  *
@@ -23,7 +23,7 @@
  *  E.T.S.I. Telecomunicación
  *  Universidad de Valladolid
  *  Paseo de Belén 15, 47002 Valladolid, Spain.
- *  jroyval@lpi.tel.uva.es    
+ *  jroyval@lpi.tel.uva.es
  */
 #include <gsl/gsl_errno.h>
 
@@ -39,24 +39,28 @@
 
 unsigned int stable_get_THREADS() { return THREADS; }
 
+//TODO: Get number of cores in differents platforms following C99 standar
 #ifdef __WIN32
 void stable_set_THREADS(unsigned int value) {
+// Had some problems to pass CRAN tests with this section:
 /*
   SYSTEM_INFO sysinfo;
   GetSystemInfo(&sysinfo);
   THREADS = (unsigned int)sysinfo.dwNumberOfProcessors;
-  */
-
-  THREADS = 12;
+*/
+  if (value == 0) THREADS = 12;
+  else THREADS = value;
 }
 #else
-#ifdef __unix
 void stable_set_THREADS(unsigned int value) {
+/*
   if (value == 0) THREADS = sysconf(_SC_NPROCESSORS_ONLN);
   else THREADS = value;
   //printf("\nCPUs = %u\n",THREADS);
+*/
+  if (value == 0) THREADS = 12;
+  else THREADS = value;
 }
-#endif
 #endif
 
 
@@ -371,9 +375,9 @@ StableDist * stable_create(double alpha, double beta, double sigma, double mu,
       perror ("Error during distribution creation.");
       return NULL;
     }
-  gsl_rng_env_setup(); //leemos las variables de entorno
+  // gsl_rng_env_setup(); //leemos las variables de entorno
   dist->gslworkspace = gsl_integration_workspace_alloc(IT_MAX);
-  dist->gslrand = gsl_rng_alloc (gsl_rng_default);
+  // dist->gslrand = gsl_rng_alloc (gsl_rng_default);
 
   //Allow the distribution to use THREADS threads.
   stable_set_THREADS(THREADS);
@@ -395,6 +399,6 @@ void stable_free(StableDist *dist)
   if (dist == NULL)
     return;
   gsl_integration_workspace_free(dist->gslworkspace);
-  gsl_rng_free(dist->gslrand);
+  // gsl_rng_free(dist->gslrand);
   free(dist);
 }

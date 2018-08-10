@@ -1,5 +1,5 @@
 /* stable/stable_cdf.c
- * 
+ *
  * Code for computing the CDF of an alpha-estable distribution.
  * Expresions presented in [1] are employed.
  *
@@ -8,16 +8,16 @@
  *
  * Copyright (C) 2013. Javier Royuela del Val
  *                     Federico Simmross Wattenberg
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; version 3 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; If not, see <http://www.gnu.org/licenses/>.
  *
@@ -26,7 +26,7 @@
  *  E.T.S.I. Telecomunicación
  *  Universidad de Valladolid
  *  Paseo de Belén 15, 47002 Valladolid, Spain.
- *  jroyval@lpi.tel.uva.es    
+ *  jroyval@lpi.tel.uva.es
  */
 #include "stable.h"
 #include "stable_integration.h"
@@ -50,7 +50,7 @@ double stable_cdf_g1(double theta, void *args)
   #endif
 
   g = V + dist->xxipow;
-  // Taylor: exp(-x) ~ 1-x en x ~ 0 
+  // Taylor: exp(-x) ~ 1-x en x ~ 0
   // If g < 1.52e-8 -> exp(-g) = (1-g) with double precision.
   // This way, we avoid evaluating an extra exp(x).
   if((g=exp(g)) < 1.522e-8)
@@ -81,7 +81,7 @@ double stable_cdf_g2(double theta, void *args)
   #endif
 
   g = V + dist->xxipow;
-  // Taylor: exp(-x) ~ 1-x en x ~ 0 
+  // Taylor: exp(-x) ~ 1-x en x ~ 0
   // If g < 1.52e-8 -> exp(-g) = (1-g) with double precision.
   // This way, we avoid evaluating an extra exp(x).
   if((g=exp(g)) < 1.522e-8)
@@ -170,7 +170,7 @@ void * thread_init_cdf(void *ptr_args)
       counter_++;
     }
   pthread_exit(NULL);
-  
+
   return NULL;
 }
 
@@ -183,11 +183,9 @@ void stable_cdf(StableDist *dist, const double* x, const unsigned int Nx, double
   pthread_t threads[THREADS];
   StableArgsCdf args[THREADS];
 
-/* Si no se introduce el puntero para el error, se crea */
   if (err==NULL) {flag=1;err=(double*)malloc(Nx*sizeof(double));}
-  
-/* Reparto de los puntos de evaluacion entre los hilos disponibles */
 
+  // Distribute evaluation points between threads
   Nx_thread[0] = Nx/THREADS;
   if (0 < Nx%THREADS) Nx_thread[0]++;
 
@@ -199,7 +197,7 @@ void stable_cdf(StableDist *dist, const double* x, const unsigned int Nx, double
       initpoint[k] = initpoint[k-1] + Nx_thread[k-1];
     }
 
-/* Creacion de los hilos, pasando a cada uno una copia de la distribucion */
+  // Create threads with a copy of the distribution
 
   for(k=0; k<THREADS; k++)
     {
@@ -212,19 +210,19 @@ void stable_cdf(StableDist *dist, const double* x, const unsigned int Nx, double
 
       if(pthread_create(&threads[k], NULL, thread_init_cdf, (void *)&args[k]))
         {
-          perror("Error en la creacion de hilo");
+          perror("Error while creating thread");
           if (flag==1) free(err);
           return;
         }
     }
 
-/* Esperar a finalizacion de todos los hilos */
+/* Wait until every thread finishes */
   for(k=0; k<THREADS; k++)
     {
       pthread_join(threads[k], &status);
     }
 
-/* Liberar las copias de la distribucion realizadas */
+/* Free dist copies */
   for(k=0; k<THREADS; k++)
     {
       stable_free(args[k].dist);
@@ -233,11 +231,11 @@ void stable_cdf(StableDist *dist, const double* x, const unsigned int Nx, double
 }
 
 /******************************************************************************/
-/*   Estrategia de integracion para CDF                                       */
+/*   CDF evaluatio                                       */
 /******************************************************************************/
 
 double
-stable_integration_cdf(StableDist *dist, double(*integrando)(double,void*),
+stable_integration_cdf(StableDist *dist, double(*integrand)(double,void*),
                   double(*auxiliar)(double,void*), double *err)
 {
     int k,warnz[SUBS_def],method_[SUBS_def];
@@ -265,7 +263,7 @@ stable_integration_cdf(StableDist *dist, double(*integrando)(double,void*),
 
             g[k]=stable_cdf_g(theta[k],(void*)dist);
 
-            stable_integration(dist,integrando,
+            stable_integration(dist,integrand,
                                theta[k],theta[k+1],
                                max(cdf*relTOL,absTOL)/SUBS_def,relTOL,IT_MAX,
                                &cdf1,&err1,method_[SUBS_def-k-1]);
@@ -287,7 +285,7 @@ stable_integration_cdf(StableDist *dist, double(*integrando)(double,void*),
 
             g[k]=stable_cdf_g(theta[k],(void*)dist);
 
-            stable_integration(dist,integrando,
+            stable_integration(dist,integrand,
                                theta[k-1],theta[k],
                                max(cdf*relTOL,absTOL)/SUBS_def,relTOL,IT_MAX,
                                &cdf1,&err1,method_[k-1]);
@@ -296,7 +294,7 @@ stable_integration_cdf(StableDist *dist, double(*integrando)(double,void*),
           }
       }
   *err=sqrt(*err);
-  //freopen("data_integrando.txt","w",file_integ);
+  //freopen("data_integrand.txt","w",file_integ);
   /*fprintf(FINTEG,"%le\t%le\t%le\t%le\t%le\t%le\t%le\t%le\t\n",
           x,theta[0],theta[SUBS_def/2],theta[SUBS_def],g[0],g[SUBS_def/2],g[SUBS_def],pdf);*/
 
@@ -305,7 +303,7 @@ stable_integration_cdf(StableDist *dist, double(*integrando)(double,void*),
 
 
 /******************************************************************************/
-/*   CDF de casos particulares                                                */
+/*   CDF in particular cases                                                */
 /******************************************************************************/
 
 double
@@ -324,7 +322,7 @@ stable_cdf_point_CAUCHY(StableDist *dist, const double x, double *err)
   *err = 0.0;
 
   return 0.5+M_1_PI*atan(x_);
-}   
+}
 
 double
 stable_cdf_point_LEVY(StableDist *dist, const double x, double *err)
@@ -339,7 +337,7 @@ stable_cdf_point_LEVY(StableDist *dist, const double x, double *err)
 }
 
 /******************************************************************************/
-/*   CDF en otros casos                                                       */
+/*   CDF general case                                                       */
 /******************************************************************************/
 double
 stable_cdf_point_ALPHA_1(StableDist *dist, const double x, double *err)
@@ -347,7 +345,7 @@ stable_cdf_point_ALPHA_1(StableDist *dist, const double x, double *err)
   double cdf=0;
   double x_;
 
-  double(*integrando)(double,void *) = &stable_cdf_g1;
+  double(*integrand)(double,void *) = &stable_cdf_g1;
   double(*auxiliar)(double,void *)   = &stable_cdf_g_aux1;
 
   x_=(x-dist->mu_0)/dist->sigma;
@@ -364,7 +362,7 @@ stable_cdf_point_ALPHA_1(StableDist *dist, const double x, double *err)
   //dist->xxipow = exp(-PI*x_*0.5/dist->beta_);
   dist->xxipow = (-M_PI*x_*0.5/dist->beta_);
 
-  cdf = stable_integration_cdf(dist,integrando,auxiliar,err);
+  cdf = stable_integration_cdf(dist,integrand,auxiliar,err);
 
   if (dist->beta>0)
     cdf = dist->c3*cdf;
@@ -379,18 +377,16 @@ stable_cdf_point_STABLE(StableDist *dist, const double x, double *err)
 {
   double cdf=0;
   double x_, xxi;
-  
-  double(*integrando)(double,void *) = &stable_cdf_g2;
+
+  double(*integrand)(double,void *) = &stable_cdf_g2;
   double(*auxiliar)(double,void *)= &stable_cdf_g_aux2;
   x_=(x-dist->mu_0)/dist->sigma;
   xxi=x_-dist->xi;
   *err=0.0;
-        
-        //xxi_th = pow(10,XXI_TH/fabs(dist->alphainvalpha1));//REVISAR CON NOLAN...
-        /*Si justo evaluo en o cerca de xi*/
+
+        /* If too close to xi*/
     if (fabs(xxi) < XXI_TH)
       {
-       // printf("_%lf_\n",x);
         cdf = M_1_PI*(M_PI_2-dist->theta0);
         return cdf;
       }
@@ -406,24 +402,24 @@ stable_cdf_point_STABLE(StableDist *dist, const double x, double *err)
         dist->beta_=dist->beta;
         if (fabs(dist->theta0_+M_PI_2)<THETA_TH) return 1.0;
       }
-    //dist->xxipow=pow(fabs(xxi),dist->alphainvalpha1);
+
     dist->xxipow=dist->alphainvalpha1*log(fabs(xxi));
-    
-    //Solo si alpha1 o zona estable.
-    cdf = stable_integration_cdf(dist,integrando,auxiliar,err);
- 
+
+    // Only get here if alpha==1 or stable evaluation zone.
+    cdf = stable_integration_cdf(dist,integrand,auxiliar,err);
+
   if (xxi>0)
     cdf = dist->c1+dist->c3*cdf;
   else if (dist->alpha>1.0)
     cdf = - dist->c3*cdf;
-  else// if (dist->alpha<1.0)
+  else
     cdf = 0.5 - (dist->theta0 + cdf)*M_1_PI;
 
   return cdf;
 }
 
 /******************************************************************************/
-/*   CDF point en general                                                     */
+/*   CDF general point                                                 */
 /******************************************************************************/
 
 double

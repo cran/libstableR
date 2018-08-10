@@ -1,20 +1,20 @@
 /* stable/stable_fit.c
- * 
+ *
  * Functions employed by different methods of estimation implemented
  * in Libstable.
  *
  * Copyright (C) 2013. Javier Royuela del Val
  *                     Federico Simmross Wattenberg
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; version 3 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; If not, see <http://www.gnu.org/licenses/>.
  *
@@ -23,7 +23,7 @@
  *  E.T.S.I. Telecomunicación
  *  Universidad de Valladolid
  *  Paseo de Belén 15, 47002 Valladolid, Spain.
- *  jroyval@lpi.tel.uva.es    
+ *  jroyval@lpi.tel.uva.es
  */
 #include "stable.h"
 #include "mcculloch.h"
@@ -206,7 +206,7 @@ int stable_fit_iter(StableDist *dist, const double * data, const unsigned int le
   par.nu_c=nu_c;
   par.nu_z=nu_z;
 
-  /* Inicio: Debe haberse inicializado dist con alpha y beta de McCulloch */
+  /* Init: Dist must be initialized with McCulloch estimation */
   theta=gsl_vector_alloc(2);
   gsl_vector_set (theta, 0, dist->alpha);
   gsl_vector_set (theta, 1, dist->beta);
@@ -215,21 +215,19 @@ int stable_fit_iter(StableDist *dist, const double * data, const unsigned int le
     Rprintf("%lf, %lf\n",gsl_vector_get (theta, 0),gsl_vector_get (theta, 1));
   #endif
 
-  /* Saltos iniciales */
+  /* Initial steps */
   ss = gsl_vector_alloc (2);
   gsl_vector_set_all (ss, 0.01);
 
-  /* Funcion a minimizar */
+  /* Cost function */
   likelihood_func.n = 2; // Dimension 2 (alpha y beta)
   likelihood_func.f = &stable_minusloglikelihood;
   likelihood_func.params = (void *) (&par);  // Parametros de la funcion
 
-   /* Creacion del minimizer */
   T = gsl_multimin_fminimizer_nmsimplex2rand;
 
   s = gsl_multimin_fminimizer_alloc (T, 2); /* Dimension 2*/
 
-  /* Poner funcion, estimacion inicial, saltos iniciales */
   gsl_multimin_fminimizer_set (s, &likelihood_func, theta, ss);
 
   #ifdef DEBUG
@@ -241,28 +239,8 @@ int stable_fit_iter(StableDist *dist, const double * data, const unsigned int le
     {
       iter++;
       status = gsl_multimin_fminimizer_iterate(s);
- //     if (status!=GSL_SUCCESS) {
- //       printf("Minimizer warning: %s\n",gsl_strerror(status));
- //       fflush(stdout);
- //      }
-
       size = gsl_multimin_fminimizer_size (s);
       status = gsl_multimin_test_size (size, 0.02);
-/*
-      if (status == GSL_SUCCESS)
-        {
-          printf ("              converged to minimum at\n");
-        }
-
-      printf ("%5d %1.5f %1.5f %1.5f %1.5f f() = %1.8e size = %.5f\n",
-              (int)iter,
-              gsl_vector_get (s->x, 0),
-              gsl_vector_get (s->x, 1),
-              p->dist->sigma,
-              p->dist->mu_1,
-              s->fval, size);
-        //}
-*/
     } while (status == GSL_CONTINUE && iter < 200);
 
 //  if (status!=GSL_SUCCESS)
@@ -271,22 +249,16 @@ int stable_fit_iter(StableDist *dist, const double * data, const unsigned int le
 //      fflush(stdout);
 //    }
 
-  /* Se recupera la estimacion alpha y beta */
+  /* Recover alpha and beta estimations */
   gsl_vector_free(theta);
-/*
-  theta = gsl_multimin_fminimizer_x (s);
-  a = gsl_vector_get (theta, 0);
-  b = gsl_vector_get (theta, 1);
-*/
+
   a = gsl_vector_get (s->x, 0);
   b = gsl_vector_get (s->x, 1);
 
-  /* Y se estima sigma y mu para esos alpha y beta */
+  /* Estimate sigma and beta with McCulloch */
   czab(a, b, nu_c, nu_z, &c, &m);
 
-  //printf("%5d %10.3e %10.3e %10.3e %10.3e\n",(int)iter,a,b,c,m);
-
-  // Se almacena el punto estimado en la distribucion, comprobando que es valido
+  // Store estimation
   if (stable_setparams(dist,a,b,c,m,0)<0)
    {
     perror("FINAL ESTIMATED PARAMETER ARE NOT VALID\n");

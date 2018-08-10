@@ -164,9 +164,7 @@ stable_integration_QNG(StableDist *dist,double(function)(double, void*),
           *abserr=sqrt(*abserr);
           if(*abserr<epsabs || *abserr<epsrel*fabs(*result))
            {
-//          #ifdef DEBUG
             printf(" %d ! ",warn);
-//          #endif
             break; 
            }
         }

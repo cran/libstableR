@@ -87,6 +87,7 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
   gsl_complex * phi2 = NULL;
 
   int i;
+  int stat;
 
   double alpha = dist->alpha;
   double beta  = dist->beta;
@@ -121,7 +122,6 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
   gsl_vector * ydat = NULL;
   gsl_vector * weights = NULL;
 
-  int stat = 0;
   double sumsq = .0;
   double c0 = .0, c1 = .0;
   double cov00 = .0, cov01 = .0, cov11 = .0;
@@ -131,7 +131,8 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
   double **covZZ = NULL;
 
   int iter = 0;
-  int K,L;
+  int K = 0;
+  int L = 0;
   int row, col;
   double t_0=0;
   double step_u=0;
@@ -187,15 +188,15 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
     }
 
     if (iter==0) { //Use ordinary least squares regression
- //     printf("ordls: ");fflush(stdout);
+
       stat = gsl_fit_linear (w, 1, y, 1, K, &c0, &c1, &cov00, &cov01, &cov11, &sumsq);
       alpha = c1;
       sigmanew = pow(exp(c0)/2.0,1.0/alpha);
       sigma = sigma*sigmanew;
-//      printf("stat = %d, alpha=%f, sigma=%f\n",stat,alpha,sigma);
+
     }
     else { //Use weighted least squares regression
-//      printf("wls: ");fflush(stdout);
+
       setcovYY(t, K, N, alpha, beta, 1.0, covYY);
       for (i=0;i<K;i++) {
         p[i] = 1.0/covYY[i][i];
@@ -204,12 +205,12 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
       alpha = c1;
       sigmanew = pow(exp(c0)/2.0,1.0/alpha);
       sigma = sigma*sigmanew;
- //     printf("stat = %d, alpha=%f, sigma=%f\n",stat,alpha,sigma);
+
     }
 
 
     /*************** rescale data ******************/
-//    printf("rescale\n");fflush(stdout);
+
     for (i=0;i<N;i++) {
       s[i] = s[i]/sigmanew;
     }
@@ -221,10 +222,10 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
 
 
     /********** refine beta and mu **************/
- //   printf("refbetamu\n");fflush(stdout);
+
     if (iter <= 1) {
       L = chooseL(alpha,N);
-//      printf("alpha = %f, N = %d, L = %d\n",alpha,N,L);fflush(stdout);
+
       t_0 = ecfRoot(s,N);
       step_u = M_PI/50;
       if (t_0/L<step_u) step_u = t_0/L;
@@ -242,7 +243,7 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
       }
     }
     if (iter==0){
-//      printf("multimin alloc L = %d\n",L);fflush(stdout);
+
       linws = gsl_multifit_linear_alloc (L,2);
     }
     else if (iter ==1) {
@@ -259,9 +260,9 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
       linws = gsl_multifit_linear_alloc (L,2);
     }
 
- //   printf("Second charfunc iter %d\n",iter);fflush(stdout);
+
     stable_samplecharfunc(s,N,t2,L,phi2);
- //   printf("done\n");
+
 
     for(i=0;i<L;i++) {
       y2[i] = gsl_complex_arg(phi2[i]);
@@ -277,20 +278,20 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
     }
 
     if (iter==0) {
- //     printf("multi ordls: ");
-      stat   = gsl_multifit_linear(X,ydat,cvout,covmat,&sumsq,linws);
- //     printf("stat = %d, beta=%f\n",stat,beta);
+
+      stat = gsl_multifit_linear(X,ydat,cvout,covmat,&sumsq,linws);
+
     }
     else {
-//      printf("multi wls: ");
+
       setcovZZ(t2, L, N, alpha,  beta,  1.0, covZZ);
       weights = gsl_vector_alloc(L);
       for (i=0;i<L;i++) {
         p2[i] = 1.0/covZZ[i][i];
         gsl_vector_set(weights,i,p2[i]);
       }
-      stat  = gsl_multifit_wlinear(X,weights,ydat,cvout,covmat,&sumsq,linws);
-//      printf("stat = %d, beta=%f\n",stat,beta);
+      stat = gsl_multifit_wlinear(X,weights,ydat,cvout,covmat,&sumsq,linws);
+
     }
     if (alpha>1.98 || alpha < 0.05 || fabs(alpha-1.0)<0.05 || isnan(alpha)) {
         beta = 0.0;
@@ -300,7 +301,7 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
     estshift = gsl_vector_get(cvout,0);
     mu1    = mu1 + sigma * estshift;
 
-//    printf("rem shift\n");
+
     /*** remove estimated shift ***/
     for (i=0;i<N;i++) {
       s[i] = s[i] - estshift;
@@ -312,20 +313,17 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
       break;
     }
 
-//    printf("check conv");
+
     /** check for convergence or blow up**/
     diff = pow(alpha - alphaold,2) + pow(mu1 - mu1old,2);
     if (iter <= 2 && diff > diffmax) {
       diffmax = diff;
     }
-//    else if (diff > 2.0*diffmax) {
+
 #ifdef DEBUG
      Rprintf("blow up on iter %d\n",iter);
 #endif
-//      break;
-//    }
 
-//    printf("check best\n");
     if (fabs(diff) < diffbest) {
       alphabest = alpha;
       betabest  = beta;
@@ -392,8 +390,7 @@ int stable_fit_koutrouvelis(StableDist * dist, const double * data, const unsign
 
   gsl_multifit_linear_free(linws);
 
-  //printf(" iter %d diff %f a %f b %f s %f m %f\n",iter,diff,alpha,beta,sigma,dist->mu_0);
-  
+  (void)stat;  // Just to shut off unused-but-set-variable warning (not elegant but portable)
   return 0;
 }  // end stable_fit_koutrouvelis
 
@@ -431,8 +428,6 @@ int chooseK(double alpha, int N) {
 
   xi = 1.0 - (alpha-a[i])/(a[i-1]-a[i]);
   xj = 1.0 - (double)(n[j]-N)/(double)(n[j]-n[j-1]);
-
-//  printf("i,j = %d, %d; xi,xj = %f,  %f\n",i,j,xi,xj);
 
   /* bilinear interpolation */
   Kp =       xj * (xi * Kmat[i][ j ] + (1.0-xi) * Kmat[i-1][ j ] ) +
@@ -476,7 +471,6 @@ int chooseL(double alpha, int N) {
   xi = 1.0 - (alpha-a[i])/(a[i-1]-a[i]);
   xj = 1.0 - (double)(n[j]-N)/(double)(n[j]-n[j-1]);
 
-//  printf("i,j = %d, %d; xi,xj = %f,  %f\n",i,j,xi,xj);
   /* bilinear interpolation */
   Lp =       xj * (xi * Lmat[i][ j ] + (1.0-xi) * Lmat[i-1][ j ] ) +
        (1.0-xj) * (xi * Lmat[i][j-1] + (1.0-xi) * Lmat[i-1][j-1] );
@@ -515,13 +509,9 @@ void setcovYY(const double * t, int K, int N, double alpha, double beta, double 
       B =  calpha * beta * (-tja * stj * w + tka * stk * w + tjmtka * sign(tj - tk) * w );
       D =  calpha * (tja + tka - tjptka);
       E =  calpha * beta * ( tja * stj * w + tja * stk * w - tjptka * sign(tj + tk) * w );
-//      F =  calpha * (tja + tka);
-//      G = -calpha * tjmtka;
-//      H = -calpha * tjptka;
 
-//      printf("[j][k] = [%d][%d]",j,k);fflush(stdout);
       covYY[j][k] = (exp(A)*cos(B)+exp(D)*cos(E)-2.0) / ( 2.0 * N * pow(gam,2.0*alpha)*pow(fabs(tj*tk),alpha) );
-//      covZZ[j][k] =  exp(F)*( exp(G)*cos(B)-exp(H)*cos(E) ) /(2.0*N);
+
     }
   }
 
@@ -554,15 +544,14 @@ void setcovZZ(const double * t, int K, int N, double alpha, double beta, double 
       tjmtka = pow(fabs(tj-tk),alpha);
       tjptka = pow(fabs(tj+tk),alpha);
 
-//      A =  calpha * (tja + tka - tjmtka);
+
       B =  calpha * beta * (-tja * stj * w + tka * stk * w + tjmtka * sign(tj - tk) * w );
-//      D =  calpha * (tja + tka - tjptka);
+
       E =  calpha * beta * ( tja * stj * w + tja * stk * w - tjptka * sign(tj + tk) * w );
       F =  calpha * (tja + tka);
       G = -calpha * tjmtka;
       H = -calpha * tjptka;
 
-//      covYY[j][k] = (exp(A)*cos(B)+exp(D)*cos(E)-2.0) / ( 2.0 * N * pow(gam,2.0*alpha)*pow(fabs(tj*tk),alpha) );
       covZZ[j][k] =  exp(F)*( exp(G)*cos(B)-exp(H)*cos(E) ) /(2.0*N);
     }
   }
@@ -626,9 +615,7 @@ void stable_samplecharfunc(const double* x, const unsigned int Nx,
          zr+=cos(w*x[ix]);
          zi+=sin(w*x[ix]);
        }
-//     if (isnan(zr*zi) || isinf(zr*zi)) {
-//        printf("Bad cfuncpoint: z[%d] = z(%f) = %f +i%f",it,w,zr,zi);
-//       }
+
      GSL_SET_COMPLEX(&z[it],zr/Nx,zi/Nx);
    }
   return;
